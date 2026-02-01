@@ -4,6 +4,7 @@ import LoginModal from './components/LoginModal'
 import SignupModal from './components/SignupModal'
 import StudentDashboard from './pages/StudentDashboard'
 import WardenDashboard from './pages/WardenDashboard'
+import RaiseComplaintPage from './pages/RaiseComplaintPage'
 
 const HomePage = () => {
   const [showLogin, setShowLogin] = useState(false)
@@ -141,6 +142,7 @@ const App = () => {
         <Route path="/" element={<HomePage />} />
         <Route path="/dashboard" element={<StudentDashboard />} />
         <Route path="/warden-dashboard" element={<WardenDashboard />} />
+        <Route path="/raise-complaint" element={<RaiseComplaintPage />} />
       </Routes>
     </Router>
   )

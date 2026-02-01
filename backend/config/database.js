@@ -26,10 +26,6 @@ pool.getConnection()
 module.exports = {
   query: async (text, params) => {
     const [rows] = await pool.execute(text, params);
-    // For MySQL, rows is the actual result
-    // For INSERT: rows has insertId and affectedRows
-    // For SELECT: rows is array of results
-    // For UPDATE/DELETE: rows has affectedRows
     return { rows };
   },
   pool,

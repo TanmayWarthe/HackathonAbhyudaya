@@ -86,16 +86,26 @@ const StudentDashboard = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Check if description has minimum length
+      // Validation
+      if (!formData.category) {
+        alert("Please select a category");
+        return;
+      }
+      if (!formData.location) {
+        alert("Please enter location");
+        return;
+      }
       if (formData.description.length < 20) {
-        alert("Description must be at least 20 characters long.");
+        alert("Description must be at least 20 characters long");
         return;
       }
 
-      console.log("Complaint Submitted:", formData);
-      
+      // Auto-generate title from category and location
+      const title = `${formData.category} issue at ${formData.location}`;
+      const complaintData = { ...formData, title };
+
       // Call API to submit complaint
-      // await complaintsAPI.create(formData);
+      await complaintsAPI.create(complaintData);
       
       alert("Complaint submitted successfully!");
       
@@ -121,14 +131,9 @@ const StudentDashboard = () => {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await authAPI.logout();
-      window.location.href = '/login';
-    } catch (err) {
-      console.error('Logout error:', err);
-      alert('Failed to logout. Please try again.');
-    }
+  const handleLogout = () => {
+    authAPI.logout();
+    window.location.href = '/';
   };
 
   const renderContent = () => {
