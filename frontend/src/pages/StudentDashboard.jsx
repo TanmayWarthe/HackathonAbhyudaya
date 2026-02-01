@@ -1,22 +1,57 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { complaintsAPI, authAPI } from '../services/api'
 
 const StudentDashboard = () => {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [complaints, setComplaints] = useState([])
+  const [stats, setStats] = useState({ total: 0, submitted: 0, inProgress: 0, resolved: 0 })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const user = authAPI.getUser()
+
+  useEffect(() => {
+    fetchComplaints()
+    fetchStats()
+  }, [])
+
+  const fetchComplaints = async () => {
+    try {
+      const response = await complaintsAPI.getAll()
+      setComplaints(response.complaints)
+    } catch (err) {
+      console.error('Error fetching complaints:', err)
+      setError('Failed to load complaints')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchStats = async () => {
+    try {
+      const response = await complaintsAPI.getStats()
+      setStats(response)
+    } catch (err) {
+      console.error('Error fetching stats:', err)
+    }
+  }
+
+  const [formData, setFormData] = useState({
+    category: '',
+    description: '',
+    location: '',
+    urgency: 'medium',
+    image: null,
+  })
+  const [imagePreview, setImagePreview] = useState(null)
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📌' },
+    { id: 'raise', label: 'Raise Complaint', icon: '➕' },
     { id: 'track', label: 'Track Complaints', icon: '📊' },
     { id: 'feedback', label: 'Feedback', icon: '⭐' },
     { id: 'profile', label: 'Profile', icon: '👤' },
-  ]
-
-  // Sample complaints data
-  const complaints = [
-    { id: 1001, title: 'Broken Fan', category: 'Electrical', status: 'resolved', submittedDate: 'Jan 20, 2026', lastUpdate: 'Jan 25, 2026', assignedTo: 'Maintenance Team A', rating: null },
-    { id: 1002, title: 'Leaking Tap', category: 'Plumbing', status: 'in-progress', submittedDate: 'Jan 22, 2026', lastUpdate: 'Jan 28, 2026', assignedTo: 'Maintenance Team B', rating: null },
-    { id: 1003, title: 'Door Lock Issue', category: 'Furniture', status: 'assigned', submittedDate: 'Jan 25, 2026', lastUpdate: 'Jan 26, 2026', assignedTo: 'Maintenance Team C', rating: null },
-    { id: 1004, title: 'WiFi Not Working', category: 'Other', status: 'submitted', submittedDate: 'Jan 28, 2026', lastUpdate: 'Jan 28, 2026', assignedTo: 'Pending', rating: null },
-    { id: 1005, title: 'AC Not Cooling', category: 'Electrical', status: 'resolved', submittedDate: 'Jan 15, 2026', lastUpdate: 'Jan 18, 2026', assignedTo: 'Maintenance Team A', rating: 4 },
   ]
 
   const getStatusBadge = (status) => {
@@ -38,7 +73,10 @@ const StudentDashboard = () => {
             
             {/* Quick Raise Complaint Button */}
             <div className="mb-8">
-              <button className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg flex items-center space-x-2">
+              <button 
+                onClick={() => setActiveTab('raise')}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg flex items-center space-x-2"
+              >
                 <span className="text-xl">➕</span>
                 <span>Raise New Complaint</span>
               </button>
@@ -50,7 +88,7 @@ const StudentDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-500 text-sm font-medium">Total Complaints</p>
-                    <p className="text-3xl font-bold text-gray-800 mt-2">{complaints.length}</p>
+                    <p className="text-3xl font-bold text-gray-800 mt-2">{stats.total}</p>
                   </div>
                   <div className="text-4xl">📝</div>
                 </div>
@@ -61,7 +99,7 @@ const StudentDashboard = () => {
                   <div>
                     <p className="text-gray-500 text-sm font-medium">Pending</p>
                     <p className="text-3xl font-bold text-gray-800 mt-2">
-                      {complaints.filter(c => c.status === 'submitted').length}
+                      {stats.submitted}
                     </p>
                   </div>
                   <div className="text-4xl">⏳</div>
@@ -73,7 +111,7 @@ const StudentDashboard = () => {
                   <div>
                     <p className="text-gray-500 text-sm font-medium">In Progress</p>
                     <p className="text-3xl font-bold text-gray-800 mt-2">
-                      {complaints.filter(c => c.status === 'in-progress' || c.status === 'assigned').length}
+                      {stats.inProgress}
                     </p>
                   </div>
                   <div className="text-4xl">⚙️</div>
@@ -85,7 +123,7 @@ const StudentDashboard = () => {
                   <div>
                     <p className="text-gray-500 text-sm font-medium">Resolved</p>
                     <p className="text-3xl font-bold text-gray-800 mt-2">
-                      {complaints.filter(c => c.status === 'resolved').length}
+                      {stats.resolved}
                     </p>
                   </div>
                   <div className="text-4xl">✅</div>
@@ -96,21 +134,27 @@ const StudentDashboard = () => {
             {/* Recent Complaints */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4">Recent Complaints</h2>
-              <div className="space-y-4">
-                {complaints.slice(0, 3).map((complaint) => (
-                  <div key={complaint.id} className="border-b pb-4 last:border-b-0">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-semibold text-gray-800">#{complaint.id} - {complaint.title}</h3>
-                        <p className="text-sm text-gray-600 mt-1">Submitted on {complaint.submittedDate}</p>
+              {loading ? (
+                <p className="text-gray-600">Loading complaints...</p>
+              ) : complaints.length === 0 ? (
+                <p className="text-gray-600">No complaints yet. Click 'Raise Complaint' to submit one.</p>
+              ) : (
+                <div className="space-y-4">
+                  {complaints.slice(0, 3).map((complaint) => (
+                    <div key={complaint.id} className="border-b pb-4 last:border-b-0">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-semibold text-gray-800">#{complaint.id} - {complaint.title}</h3>
+                          <p className="text-sm text-gray-600 mt-1">Submitted on {new Date(complaint.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <span className={`px-3 py-1 ${getStatusBadge(complaint.status)} text-sm rounded-full capitalize`}>
+                          {complaint.status.replace('-', ' ')}
+                        </span>
                       </div>
-                      <span className={`px-3 py-1 ${getStatusBadge(complaint.status)} text-sm rounded-full capitalize`}>
-                        {complaint.status.replace('-', ' ')}
-                      </span>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
               <button 
                 onClick={() => setActiveTab('track')}
                 className="mt-4 text-blue-600 hover:text-blue-800 font-medium text-sm"
@@ -120,6 +164,218 @@ const StudentDashboard = () => {
             </div>
           </div>
         )
+      
+      case 'raise': {
+        const handleChange = (e) => {
+          const { name, value, files } = e.target;
+          if (files && files[0]) {
+            setFormData({
+              ...formData,
+              [name]: files[0],
+            });
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setImagePreview(reader.result);
+            };
+            reader.readAsDataURL(files[0]);
+          } else {
+            setFormData({
+              ...formData,
+              [name]: value,
+            });
+          }
+        };
+
+        const handleSubmit = (e) => {
+          e.preventDefault();
+          console.log("Complaint Submitted:", formData);
+          alert("Complaint submitted successfully!");
+          // Reset form
+          setFormData({
+            category: '',
+            description: '',
+            location: '',
+            urgency: 'medium',
+            image: null,
+          });
+          setImagePreview(null);
+          // Go back to dashboard
+          setActiveTab('dashboard');
+        };
+
+        return (
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-6">➕ Raise a Complaint</h1>
+            
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="bg-linear-to-r from-blue-600 to-indigo-600 px-6 py-4">
+                <p className="text-white">Fill in the details below to submit your maintenance request</p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                {/* Category and Urgency Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Complaint Category */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <span className="flex items-center">
+                        <span className="mr-2">🏷️</span>
+                        Complaint Category *
+                      </span>
+                    </label>
+                    <select
+                      name="category"
+                      value={formData.category}
+                      onChange={handleChange}
+                      required
+                      className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    >
+                      <option value="">Select Category</option>
+                      <option value="Plumbing">🚰 Plumbing</option>
+                      <option value="Electrical">⚡ Electrical</option>
+                      <option value="Furniture">🪑 Furniture</option>
+                      <option value="Cleanliness">🧹 Cleanliness</option>
+                      <option value="Internet">📡 Internet/WiFi</option>
+                      <option value="Other">📋 Other</option>
+                    </select>
+                  </div>
+
+                  {/* Urgency Level */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <span className="flex items-center">
+                        <span className="mr-2">🚨</span>
+                        Urgency Level *
+                      </span>
+                    </label>
+                    <select
+                      name="urgency"
+                      value={formData.urgency}
+                      onChange={handleChange}
+                      required
+                      className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    >
+                      <option value="low">🟢 Low - Can wait a few days</option>
+                      <option value="medium">🟡 Medium - Within 1-2 days</option>
+                      <option value="high">🔴 High - Urgent attention needed</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <span className="flex items-center">
+                      <span className="mr-2">📍</span>
+                      Specific Location *
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    required
+                    placeholder="e.g., Room 101, Common Bathroom, Study Hall"
+                    className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <span className="flex items-center">
+                      <span className="mr-2">📄</span>
+                      Detailed Description *
+                    </span>
+                  </label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    rows="5"
+                    required
+                    placeholder="Please describe the issue in detail. Include any relevant information that will help us resolve it quickly..."
+                    className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition resize-none"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">Minimum 20 characters required</p>
+                </div>
+
+                {/* Image Upload */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <span className="flex items-center">
+                      <span className="mr-2">📷</span>
+                      Upload Image (Optional)
+                    </span>
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition">
+                    <input
+                      type="file"
+                      name="image"
+                      accept="image/*"
+                      onChange={handleChange}
+                      className="hidden"
+                      id="image-upload"
+                    />
+                    <label htmlFor="image-upload" className="cursor-pointer">
+                      {imagePreview ? (
+                        <div className="space-y-3">
+                          <img 
+                            src={imagePreview} 
+                            alt="Preview" 
+                            className="max-h-48 mx-auto rounded-lg shadow-md"
+                          />
+                          <p className="text-sm text-gray-600">Click to change image</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="text-5xl">📸</div>
+                          <p className="text-gray-600 font-medium">Click to upload an image</p>
+                          <p className="text-xs text-gray-500">PNG, JPG, JPEG up to 5MB</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('dashboard')}
+                    className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-200 transition duration-200 border-2 border-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-linear-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition duration-200 shadow-lg hover:shadow-xl"
+                  >
+                    Submit Complaint
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Info Card */}
+            <div className="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+              <div className="flex items-start">
+                <span className="text-2xl mr-3">💡</span>
+                <div>
+                  <h3 className="font-semibold text-blue-900 mb-1">Quick Tips</h3>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• Be as specific as possible about the issue</li>
+                    <li>• Include the exact location for faster response</li>
+                    <li>• Upload a photo if it helps explain the problem</li>
+                    <li>• You'll receive updates via email and dashboard</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
       
       case 'track':
         return (

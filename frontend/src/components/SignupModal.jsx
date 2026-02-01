@@ -1,30 +1,58 @@
 import React, { useState } from 'react';
+import { authAPI } from '../services/api';
 
-const SignupModal = ({ isOpen, onClose, onSwitchToLogin }) => {
+const SignupModal = ({ isOpen, onClose, onSwitchToLogin, onSignup }) => {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
     confirmPassword: '',
+    role: 'student',
     hostelName: '',
     roomNumber: '',
   });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
+    setError(''); // Clear error when user types
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
     if (formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match!');
+      setError('Passwords do not match!');
       return;
     }
-    console.log('Signup:', formData);
-    // Add signup logic here
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long!');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await authAPI.signup(formData);
+      console.log('Signup successful:', response);
+      
+      // Call onSignup callback with role
+      if (onSignup) {
+        onSignup(response.user.role);
+      }
+      onClose();
+    } catch (err) {
+      console.error('Signup error:', err);
+      setError(err.response?.data?.message || 'Signup failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -48,6 +76,13 @@ const SignupModal = ({ isOpen, onClose, onSwitchToLogin }) => {
           <p className="text-gray-600">Sign up to get started</p>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
@@ -67,6 +102,22 @@ const SignupModal = ({ isOpen, onClose, onSwitchToLogin }) => {
           </div>
 
           <div>
+            <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
+              Register As
+            </label>
+            <select
+              id="role"
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            >
+              <option value="student">🎓 Student</option>
+              <option value="warden">👨‍💼 Warden</option>
+            </select>
+          </div>
+
+          <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email Address
             </label>
@@ -82,38 +133,40 @@ const SignupModal = ({ isOpen, onClose, onSwitchToLogin }) => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="hostelName" className="block text-sm font-medium text-gray-700 mb-2">
-                Hostel Name
-              </label>
-              <input
-                type="text"
-                id="hostelName"
-                name="hostelName"
-                value={formData.hostelName}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="e.g., Hostel A"
-              />
+          {formData.role === 'student' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="hostelName" className="block text-sm font-medium text-gray-700 mb-2">
+                  Hostel Name
+                </label>
+                <input
+                  type="text"
+                  id="hostelName"
+                  name="hostelName"
+                  value={formData.hostelName}
+                  onChange={handleChange}
+                  required={formData.role === 'student'}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  placeholder="e.g., Hostel A"
+                />
+              </div>
+              <div>
+                <label htmlFor="roomNumber" className="block text-sm font-medium text-gray-700 mb-2">
+                  Room Number
+                </label>
+                <input
+                  type="text"
+                  id="roomNumber"
+                  name="roomNumber"
+                  value={formData.roomNumber}
+                  onChange={handleChange}
+                  required={formData.role === 'student'}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  placeholder="e.g., 101"
+                />
+              </div>
             </div>
-            <div>
-              <label htmlFor="roomNumber" className="block text-sm font-medium text-gray-700 mb-2">
-                Room Number
-              </label>
-              <input
-                type="text"
-                id="roomNumber"
-                name="roomNumber"
-                value={formData.roomNumber}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="e.g., 101"
-              />
-            </div>
-          </div>
+          )}
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
@@ -151,9 +204,10 @@ const SignupModal = ({ isOpen, onClose, onSwitchToLogin }) => {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 disabled:bg-blue-400 disabled:cursor-not-allowed"
           >
-            Create Account
+            {loading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 

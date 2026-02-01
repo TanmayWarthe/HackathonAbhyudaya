@@ -1,16 +1,14 @@
 import React, { useState } from 'react'
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'
 import LoginModal from './components/LoginModal'
 import SignupModal from './components/SignupModal'
+import StudentDashboard from './pages/StudentDashboard'
+import WardenDashboard from './pages/WardenDashboard'
 
-const App = () => {
+const HomePage = () => {
   const [showLogin, setShowLogin] = useState(false)
   const [showSignup, setShowSignup] = useState(false)
-  const [showDashboard, setShowDashboard] = useState(false)
-
-  // Show dashboard if enabled
-  if (showDashboard) {
-    return <StudentDashboard />
-  }
+  const navigate = useNavigate()
 
   const handleSwitchToSignup = () => {
     setShowLogin(false)
@@ -20,6 +18,24 @@ const App = () => {
   const handleSwitchToLogin = () => {
     setShowSignup(false)
     setShowLogin(true)
+  }
+
+  const handleLogin = (role) => {
+    // Navigate based on role
+    if (role === 'warden') {
+      navigate('/warden-dashboard')
+    } else {
+      navigate('/dashboard')
+    }
+  }
+
+  const handleSignup = (role) => {
+    // Navigate based on role after signup
+    if (role === 'warden') {
+      navigate('/warden-dashboard')
+    } else {
+      navigate('/dashboard')
+    }
   }
 
   return (
@@ -33,7 +49,7 @@ const App = () => {
             </div>
             <div className="flex space-x-4">
               <button
-                onClick={() => setShowDashboard(true)}
+                onClick={() => navigate('/dashboard')}
                 className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition"
               >
                 View Dashboard
@@ -106,13 +122,27 @@ const App = () => {
         isOpen={showLogin} 
         onClose={() => setShowLogin(false)}
         onSwitchToSignup={handleSwitchToSignup}
+        onLogin={handleLogin}
       />
       <SignupModal 
         isOpen={showSignup} 
         onClose={() => setShowSignup(false)}
         onSwitchToLogin={handleSwitchToLogin}
+        onSignup={handleSignup}
       />
     </div>
+  )
+}
+
+const App = () => {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/dashboard" element={<StudentDashboard />} />
+        <Route path="/warden-dashboard" element={<WardenDashboard />} />
+      </Routes>
+    </Router>
   )
 }
 

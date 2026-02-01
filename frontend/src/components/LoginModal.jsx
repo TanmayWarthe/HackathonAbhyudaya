@@ -1,22 +1,43 @@
 import React, { useState } from 'react';
+import { authAPI } from '../services/api';
 
-const LoginModal = ({ isOpen, onClose, onSwitchToSignup }) => {
+const LoginModal = ({ isOpen, onClose, onSwitchToSignup, onLogin }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    role: 'student',
   });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
+    setError(''); // Clear error when user types
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Login:', formData);
-    // Add login logic here
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await authAPI.login(formData);
+      console.log('Login successful:', response);
+      
+      // Call onLogin callback with role
+      if (onLogin) {
+        onLogin(response.user.role);
+      }
+      onClose();
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || 'Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -40,8 +61,31 @@ const LoginModal = ({ isOpen, onClose, onSwitchToSignup }) => {
           <p className="text-gray-600">Sign in to your account</p>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
+              Login As
+            </label>
+            <select
+              id="role"
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            >
+              <option value="student">🎓 Student</option>
+              <option value="warden">👨‍💼 Warden</option>
+            </select>
+          </div>
+
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email Address
@@ -86,9 +130,10 @@ const LoginModal = ({ isOpen, onClose, onSwitchToSignup }) => {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 disabled:bg-blue-400 disabled:cursor-not-allowed"
           >
-            Sign In
+            {loading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
 
