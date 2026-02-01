@@ -1,10 +1,17 @@
 import React, { useState } from 'react'
 import LoginModal from './components/LoginModal'
 import SignupModal from './components/SignupModal'
+import StudentDashboard from './pages/StudentDashboard'
 
 const App = () => {
   const [showLogin, setShowLogin] = useState(false)
   const [showSignup, setShowSignup] = useState(false)
+  const [showDashboard, setShowDashboard] = useState(false)
+
+  // Show dashboard if enabled
+  if (showDashboard) {
+    return <StudentDashboard />
+  }
 
   const handleSwitchToSignup = () => {
     setShowLogin(false)
@@ -17,7 +24,7 @@ const App = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100">
       {/* Header */}
       <nav className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -26,6 +33,12 @@ const App = () => {
               <h1 className="text-2xl font-bold text-blue-600">Hostel Complaint System</h1>
             </div>
             <div className="flex space-x-4">
+              <button
+                onClick={() => setShowDashboard(true)}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition"
+              >
+                View Dashboard
+              </button>
               <button
                 onClick={() => setShowLogin(true)}
                 className="px-6 py-2 text-blue-600 font-semibold hover:text-blue-700 transition"
