@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import LoginModal from './components/LoginModal'
 import SignupModal from './components/SignupModal'
+import RaiseComplaintPage from './pages/RaiseComplaintPage'
 
 const App = () => {
   const [showLogin, setShowLogin] = useState(false)
