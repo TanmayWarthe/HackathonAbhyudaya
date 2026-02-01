@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { complaintsAPI, authAPI } from '../services/api'
+import React, { useState, useEffect, useCallback } from 'react'
+import { complaintsAPI } from '../services/api'
 
 const WardenDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -7,7 +7,6 @@ const WardenDashboard = () => {
   const [complaints, setComplaints] = useState([])
   const [stats, setStats] = useState({ total: 0, submitted: 0, inProgress: 0, resolved: 0, overdue: 0 })
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [filters, setFilters] = useState({
     category: '',
     priority: '',
@@ -17,28 +16,27 @@ const WardenDashboard = () => {
   useEffect(() => {
     fetchComplaints()
     fetchStats()
-  }, [])
+  }, [fetchComplaints, fetchStats])
 
-  const fetchComplaints = async () => {
+  const fetchComplaints = useCallback(async () => {
     try {
       const response = await complaintsAPI.getAll(filters)
       setComplaints(response.complaints)
     } catch (err) {
       console.error('Error fetching complaints:', err)
-      setError('Failed to load complaints')
     } finally {
       setLoading(false)
     }
-  }
+  }, [filters])
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const response = await complaintsAPI.getStats()
       setStats(response)
     } catch (err) {
       console.error('Error fetching stats:', err)
     }
-  }
+  }, [])
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -84,7 +82,7 @@ const WardenDashboard = () => {
 
   const filteredComplaints = complaints.filter(complaint => {
     if (filters.category && complaint.category !== filters.category) return false
-    if (filters.priority && complaint.priority !== filters.priority) return false
+    if (filters.priority && complaint.urgency !== filters.priority) return false
     if (filters.status && complaint.status !== filters.status) return false
     return true
   })
@@ -137,7 +135,7 @@ const WardenDashboard = () => {
                   <div>
                     <p className="text-gray-500 text-sm font-medium">Resolved</p>
                     <p className="text-3xl font-bold text-gray-800 mt-2">
-                      {complaints.filter(c => c.status === 'resolved').length}
+                      {stats.resolved}
                     </p>
                   </div>
                   <div className="text-4xl">✅</div>
@@ -154,19 +152,23 @@ const WardenDashboard = () => {
                   High Priority Complaints
                 </h2>
                 <div className="space-y-3">
-                  {complaints.filter(c => c.priority === 'high' && c.status !== 'resolved').slice(0, 3).map((complaint) => (
-                    <div key={complaint.id} className="border-l-4 border-red-500 pl-4 py-2 bg-red-50 rounded">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-semibold text-gray-800">#{complaint.id} - {complaint.title}</h3>
-                          <p className="text-sm text-gray-600">Room {complaint.room} • {complaint.student}</p>
+                  {complaints.filter(c => c.urgency === 'high' && c.status !== 'resolved').slice(0, 3).length > 0 ? (
+                    complaints.filter(c => c.urgency === 'high' && c.status !== 'resolved').slice(0, 3).map((complaint) => (
+                      <div key={complaint.id} className="border-l-4 border-red-500 pl-4 py-2 bg-red-50 rounded">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-semibold text-gray-800">#{complaint.id} - {complaint.title}</h3>
+                            <p className="text-sm text-gray-600">Room {complaint.room_number} • {complaint.student_name}</p>
+                          </div>
+                          <span className={`px-2 py-1 ${getStatusBadge(complaint.status)} text-xs rounded-full`}>
+                            {complaint.status}
+                          </span>
                         </div>
-                        <span className={`px-2 py-1 ${getStatusBadge(complaint.status)} text-xs rounded-full`}>
-                          {complaint.status}
-                        </span>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-sm">No high priority complaints</p>
+                  )}
                 </div>
               </div>
 
@@ -177,22 +179,26 @@ const WardenDashboard = () => {
                   Overdue Complaints
                 </h2>
                 <div className="space-y-3">
-                  {complaints.filter(c => c.status === 'overdue').map((complaint) => (
-                    <div key={complaint.id} className="border-l-4 border-red-700 pl-4 py-2 bg-red-50 rounded">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-semibold text-gray-800">#{complaint.id} - {complaint.title}</h3>
-                          <p className="text-sm text-gray-600">Room {complaint.room} • Deadline: {complaint.deadline}</p>
+                  {complaints.filter(c => c.status === 'overdue').length > 0 ? (
+                    complaints.filter(c => c.status === 'overdue').map((complaint) => (
+                      <div key={complaint.id} className="border-l-4 border-red-700 pl-4 py-2 bg-red-50 rounded">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-semibold text-gray-800">#{complaint.id} - {complaint.title}</h3>
+                            <p className="text-sm text-gray-600">Room {complaint.room_number} • Deadline: {complaint.deadline || 'Not set'}</p>
+                          </div>
+                          <button 
+                            onClick={() => { setSelectedComplaint(complaint); setActiveTab('complaints'); }}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            Review →
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => { setSelectedComplaint(complaint); setActiveTab('complaints'); }}
-                          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                        >
-                          Review →
-                        </button>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-sm">No overdue complaints</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -201,24 +207,30 @@ const WardenDashboard = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4">Recent Complaints</h2>
               <div className="space-y-4">
-                {complaints.slice(0, 4).map((complaint) => (
-                  <div key={complaint.id} className="flex justify-between items-center border-b pb-3 last:border-b-0">
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <h3 className="font-semibold text-gray-800">#{complaint.id} - {complaint.title}</h3>
-                        <p className="text-sm text-gray-600">Room {complaint.room} • {complaint.category}</p>
+                {loading ? (
+                  <p className="text-gray-600">Loading complaints...</p>
+                ) : complaints.length > 0 ? (
+                  complaints.slice(0, 4).map((complaint) => (
+                    <div key={complaint.id} className="flex justify-between items-center border-b pb-3 last:border-b-0">
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <h3 className="font-semibold text-gray-800">#{complaint.id} - {complaint.title}</h3>
+                          <p className="text-sm text-gray-600">Room {complaint.room_number} • {complaint.category}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className={`px-3 py-1 ${getPriorityBadge(complaint.urgency)} text-xs rounded-full font-medium`}>
+                          {complaint.urgency}
+                        </span>
+                        <span className={`px-3 py-1 ${getStatusBadge(complaint.status)} text-xs rounded-full`}>
+                          {complaint.status}
+                        </span>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <span className={`px-3 py-1 ${getPriorityBadge(complaint.priority)} text-xs rounded-full font-medium`}>
-                        {complaint.priority}
-                      </span>
-                      <span className={`px-3 py-1 ${getStatusBadge(complaint.status)} text-xs rounded-full`}>
-                        {complaint.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-gray-600">No complaints yet</p>
+                )}
               </div>
               <button 
                 onClick={() => setActiveTab('complaints')}
@@ -316,15 +328,15 @@ const WardenDashboard = () => {
                       </div>
                       <p className="text-sm text-gray-600 mb-2">{complaint.description}</p>
                       <div className="flex items-center space-x-4 text-sm text-gray-600">
-                        <span>👤 {complaint.student}</span>
-                        <span>🚪 Room {complaint.room}</span>
+                        <span>👤 {complaint.student_name}</span>
+                        <span>🚪 Room {complaint.room_number}</span>
                         <span>📂 {complaint.category}</span>
-                        <span>📅 {complaint.submittedDate}</span>
+                        <span>📅 {new Date(complaint.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
                     <div className="flex flex-col items-end space-y-2">
-                      <span className={`px-4 py-2 ${getPriorityBadge(complaint.priority)} text-sm rounded-full capitalize font-medium`}>
-                        {complaint.priority} Priority
+                      <span className={`px-4 py-2 ${getPriorityBadge(complaint.urgency)} text-sm rounded-full capitalize font-medium`}>
+                        {complaint.urgency} Priority
                       </span>
                       <span className={`px-4 py-2 ${getStatusBadge(complaint.status)} text-sm rounded-full capitalize font-medium`}>
                         {complaint.status.replace('-', ' ')}
@@ -384,10 +396,10 @@ const WardenDashboard = () => {
                       </h3>
                       <p className="text-gray-700 mb-3">{selectedComplaint.description}</p>
                       <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div><span className="font-medium">Student:</span> {selectedComplaint.student}</div>
-                        <div><span className="font-medium">Room:</span> {selectedComplaint.room}</div>
+                        <div><span className="font-medium">Student:</span> {selectedComplaint.student_name}</div>
+                        <div><span className="font-medium">Room:</span> {selectedComplaint.room_number}</div>
                         <div><span className="font-medium">Category:</span> {selectedComplaint.category}</div>
-                        <div><span className="font-medium">Submitted:</span> {selectedComplaint.submittedDate}</div>
+                        <div><span className="font-medium">Submitted:</span> {new Date(selectedComplaint.created_at).toLocaleDateString()}</div>
                       </div>
                     </div>
 
@@ -427,7 +439,7 @@ const WardenDashboard = () => {
                           </label>
                           <select
                             name="priority"
-                            defaultValue={selectedComplaint.priority}
+                            defaultValue={selectedComplaint.urgency}
                             required
                             className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                           >
@@ -475,14 +487,14 @@ const WardenDashboard = () => {
           </div>
         )
       
-      case 'analytics':
+      case 'analytics': {
         const categoryStats = complaints.reduce((acc, c) => {
           acc[c.category] = (acc[c.category] || 0) + 1
           return acc
         }, {})
 
         const priorityStats = complaints.reduce((acc, c) => {
-          acc[c.priority] = (acc[c.priority] || 0) + 1
+          acc[c.urgency] = (acc[c.urgency] || 0) + 1
           return acc
         }, {})
 
@@ -603,6 +615,7 @@ const WardenDashboard = () => {
             </div>
           </div>
         )
+      }
       
       default:
         return <div>Select a menu item</div>

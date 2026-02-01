@@ -1,42 +1,12 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useState, useEffect, useCallback } from 'react'
 import { complaintsAPI, authAPI } from '../services/api'
 
 const StudentDashboard = () => {
-  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('dashboard')
   const [complaints, setComplaints] = useState([])
   const [stats, setStats] = useState({ total: 0, submitted: 0, inProgress: 0, resolved: 0 })
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const user = authAPI.getUser()
-
-  useEffect(() => {
-    fetchComplaints()
-    fetchStats()
-  }, [])
-
-  const fetchComplaints = async () => {
-    try {
-      const response = await complaintsAPI.getAll()
-      setComplaints(response.complaints)
-    } catch (err) {
-      console.error('Error fetching complaints:', err)
-      setError('Failed to load complaints')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchStats = async () => {
-    try {
-      const response = await complaintsAPI.getStats()
-      setStats(response)
-    } catch (err) {
-      console.error('Error fetching stats:', err)
-    }
-  }
-
+  const [imagePreview, setImagePreview] = useState(null)
   const [formData, setFormData] = useState({
     category: '',
     description: '',
@@ -44,7 +14,35 @@ const StudentDashboard = () => {
     urgency: 'medium',
     image: null,
   })
-  const [imagePreview, setImagePreview] = useState(null)
+
+  const user = authAPI.getUser()
+
+  const fetchComplaints = useCallback(async () => {
+    try {
+      setLoading(true)
+      const response = await complaintsAPI.getAll()
+      setComplaints(response.complaints || [])
+    } catch (err) {
+      console.error('Error fetching complaints:', err)
+      setComplaints([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await complaintsAPI.getStats()
+      setStats(response || { total: 0, submitted: 0, inProgress: 0, resolved: 0 })
+    } catch (err) {
+      console.error('Error fetching stats:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchComplaints()
+    fetchStats()
+  }, [fetchComplaints, fetchStats])
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📌' },
@@ -63,6 +61,75 @@ const StudentDashboard = () => {
     }
     return styles[status] || 'bg-gray-100 text-gray-800'
   }
+
+  // Moved handleChange and handleSubmit outside of renderContent
+  const handleChange = (e) => {
+    const { name, value, files } = e.target;
+    if (files && files[0]) {
+      setFormData({
+        ...formData,
+        [name]: files[0],
+      });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(files[0]);
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      // Check if description has minimum length
+      if (formData.description.length < 20) {
+        alert("Description must be at least 20 characters long.");
+        return;
+      }
+
+      console.log("Complaint Submitted:", formData);
+      
+      // Call API to submit complaint
+      // await complaintsAPI.create(formData);
+      
+      alert("Complaint submitted successfully!");
+      
+      // Reset form
+      setFormData({
+        category: '',
+        description: '',
+        location: '',
+        urgency: 'medium',
+        image: null,
+      });
+      setImagePreview(null);
+      
+      // Refresh complaints list
+      await fetchComplaints();
+      await fetchStats();
+      
+      // Go back to dashboard
+      setActiveTab('dashboard');
+    } catch (err) {
+      console.error('Error submitting complaint:', err);
+      alert("Failed to submit complaint. Please try again.");
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+      window.location.href = '/login';
+    } catch (err) {
+      console.error('Logout error:', err);
+      alert('Failed to logout. Please try again.');
+    }
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -135,7 +202,9 @@ const StudentDashboard = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4">Recent Complaints</h2>
               {loading ? (
-                <p className="text-gray-600">Loading complaints...</p>
+                <div className="flex justify-center items-center h-32">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                </div>
               ) : complaints.length === 0 ? (
                 <p className="text-gray-600">No complaints yet. Click 'Raise Complaint' to submit one.</p>
               ) : (
@@ -145,7 +214,7 @@ const StudentDashboard = () => {
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="font-semibold text-gray-800">#{complaint.id} - {complaint.title}</h3>
-                          <p className="text-sm text-gray-600 mt-1">Submitted on {new Date(complaint.created_at).toLocaleDateString()}</p>
+                          <p className="text-sm text-gray-600 mt-1">Submitted on {new Date(complaint.created_at || complaint.submittedDate).toLocaleDateString()}</p>
                         </div>
                         <span className={`px-3 py-1 ${getStatusBadge(complaint.status)} text-sm rounded-full capitalize`}>
                           {complaint.status.replace('-', ' ')}
@@ -155,60 +224,25 @@ const StudentDashboard = () => {
                   ))}
                 </div>
               )}
-              <button 
-                onClick={() => setActiveTab('track')}
-                className="mt-4 text-blue-600 hover:text-blue-800 font-medium text-sm"
-              >
-                View All Complaints →
-              </button>
+              {complaints.length > 3 && (
+                <button 
+                  onClick={() => setActiveTab('track')}
+                  className="mt-4 text-blue-600 hover:text-blue-800 font-medium text-sm"
+                >
+                  View All Complaints →
+                </button>
+              )}
             </div>
           </div>
         )
       
-      case 'raise': {
-        const handleChange = (e) => {
-          const { name, value, files } = e.target;
-          if (files && files[0]) {
-            setFormData({
-              ...formData,
-              [name]: files[0],
-            });
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              setImagePreview(reader.result);
-            };
-            reader.readAsDataURL(files[0]);
-          } else {
-            setFormData({
-              ...formData,
-              [name]: value,
-            });
-          }
-        };
-
-        const handleSubmit = (e) => {
-          e.preventDefault();
-          console.log("Complaint Submitted:", formData);
-          alert("Complaint submitted successfully!");
-          // Reset form
-          setFormData({
-            category: '',
-            description: '',
-            location: '',
-            urgency: 'medium',
-            image: null,
-          });
-          setImagePreview(null);
-          // Go back to dashboard
-          setActiveTab('dashboard');
-        };
-
+      case 'raise':
         return (
           <div>
             <h1 className="text-3xl font-bold text-gray-800 mb-6">➕ Raise a Complaint</h1>
             
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="bg-linear-to-r from-blue-600 to-indigo-600 px-6 py-4">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
                 <p className="text-white">Fill in the details below to submit your maintenance request</p>
               </div>
 
@@ -299,6 +333,11 @@ const StudentDashboard = () => {
                     className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition resize-none"
                   />
                   <p className="text-xs text-gray-500 mt-2">Minimum 20 characters required</p>
+                  {formData.description.length < 20 && formData.description.length > 0 && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {20 - formData.description.length} more characters required
+                    </p>
+                  )}
                 </div>
 
                 {/* Image Upload */}
@@ -350,7 +389,10 @@ const StudentDashboard = () => {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 bg-linear-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition duration-200 shadow-lg hover:shadow-xl"
+                    disabled={formData.description.length < 20}
+                    className={`flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition duration-200 shadow-lg hover:shadow-xl ${
+                      formData.description.length < 20 ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
                     Submit Complaint
                   </button>
@@ -375,101 +417,130 @@ const StudentDashboard = () => {
             </div>
           </div>
         )
-      }
       
       case 'track':
         return (
           <div>
             <h1 className="text-3xl font-bold text-gray-800 mb-6">📊 Complaint Status & Tracking</h1>
             
-            <div className="space-y-4">
-              {complaints.map((complaint) => (
-                <div key={complaint.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-800">
-                        #{complaint.id} - {complaint.title}
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">Category: {complaint.category}</p>
-                    </div>
-                    <span className={`px-4 py-2 ${getStatusBadge(complaint.status)} text-sm rounded-full capitalize font-medium`}>
-                      {complaint.status.replace('-', ' ')}
-                    </span>
-                  </div>
-
-                  {/* Status Flow Timeline */}
-                  <div className="mb-4">
-                    <div className="flex items-center space-x-2">
-                      <div className={`flex items-center space-x-2 ${complaint.status === 'submitted' || complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'text-blue-600' : 'text-gray-400'}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${complaint.status === 'submitted' || complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-blue-600 text-white' : 'bg-gray-300'}`}>
-                          📝
-                        </div>
-                        <span className="text-xs font-medium">Submitted</span>
-                      </div>
-                      
-                      <div className={`h-1 w-12 ${complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
-                      
-                      <div className={`flex items-center space-x-2 ${complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'text-purple-600' : 'text-gray-400'}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-purple-600 text-white' : 'bg-gray-300'}`}>
-                          👤
-                        </div>
-                        <span className="text-xs font-medium">Assigned</span>
-                      </div>
-                      
-                      <div className={`h-1 w-12 ${complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
-                      
-                      <div className={`flex items-center space-x-2 ${complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'text-yellow-600' : 'text-gray-400'}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-yellow-600 text-white' : 'bg-gray-300'}`}>
-                          ⚙️
-                        </div>
-                        <span className="text-xs font-medium">In Progress</span>
-                      </div>
-                      
-                      <div className={`h-1 w-12 ${complaint.status === 'resolved' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
-                      
-                      <div className={`flex items-center space-x-2 ${complaint.status === 'resolved' ? 'text-green-600' : 'text-gray-400'}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${complaint.status === 'resolved' ? 'bg-green-600 text-white' : 'bg-gray-300'}`}>
-                          ✅
-                        </div>
-                        <span className="text-xs font-medium">Resolved</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Complaint Details */}
-                  <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">
-                    <div>
-                      <p><strong className="text-gray-700">Submitted:</strong> {complaint.submittedDate}</p>
-                      <p><strong className="text-gray-700">Last Update:</strong> {complaint.lastUpdate}</p>
-                    </div>
-                    <div>
-                      <p><strong className="text-gray-700">Assigned To:</strong> {complaint.assignedTo}</p>
-                      {complaint.status === 'resolved' && !complaint.rating && (
-                        <button 
-                          onClick={() => setActiveTab('feedback')}
-                          className="text-blue-600 hover:text-blue-800 font-medium mt-2"
-                        >
-                          Give Feedback →
-                        </button>
-                      )}
-                    </div>
-                  </div>
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+                  <p className="text-gray-600">Loading complaints...</p>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : complaints.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                <div className="text-6xl mb-4">📋</div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">No Complaints Found</h3>
+                <p className="text-gray-600 mb-4">You haven't submitted any complaints yet.</p>
+                <button 
+                  onClick={() => setActiveTab('raise')}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                >
+                  Raise Your First Complaint
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {complaints.map((complaint) => (
+                  <div key={complaint.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-800">
+                          #{complaint.id} - {complaint.title}
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">Category: {complaint.category}</p>
+                      </div>
+                      <span className={`px-4 py-2 ${getStatusBadge(complaint.status)} text-sm rounded-full capitalize font-medium`}>
+                        {complaint.status.replace('-', ' ')}
+                      </span>
+                    </div>
+
+                    {/* Status Flow Timeline */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className={`flex flex-col items-center ${complaint.status === 'submitted' || complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'text-blue-600' : 'text-gray-400'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${complaint.status === 'submitted' || complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-blue-600 text-white' : 'bg-gray-300'}`}>
+                            📝
+                          </div>
+                          <span className="text-xs font-medium mt-1">Submitted</span>
+                        </div>
+                        
+                        <div className={`h-1 flex-1 mx-2 ${complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
+                        
+                        <div className={`flex flex-col items-center ${complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'text-purple-600' : 'text-gray-400'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${complaint.status === 'assigned' || complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-purple-600 text-white' : 'bg-gray-300'}`}>
+                            👤
+                          </div>
+                          <span className="text-xs font-medium mt-1">Assigned</span>
+                        </div>
+                        
+                        <div className={`h-1 flex-1 mx-2 ${complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
+                        
+                        <div className={`flex flex-col items-center ${complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'text-yellow-600' : 'text-gray-400'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${complaint.status === 'in-progress' || complaint.status === 'resolved' ? 'bg-yellow-600 text-white' : 'bg-gray-300'}`}>
+                            ⚙️
+                          </div>
+                          <span className="text-xs font-medium mt-1">In Progress</span>
+                        </div>
+                        
+                        <div className={`h-1 flex-1 mx-2 ${complaint.status === 'resolved' ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
+                        
+                        <div className={`flex flex-col items-center ${complaint.status === 'resolved' ? 'text-green-600' : 'text-gray-400'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${complaint.status === 'resolved' ? 'bg-green-600 text-white' : 'bg-gray-300'}`}>
+                            ✅
+                          </div>
+                          <span className="text-xs font-medium mt-1">Resolved</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Complaint Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">
+                      <div>
+                        <p><strong className="text-gray-700">Submitted:</strong> {complaint.submittedDate || new Date(complaint.created_at).toLocaleDateString()}</p>
+                        <p><strong className="text-gray-700">Last Update:</strong> {complaint.lastUpdate || 'No updates yet'}</p>
+                      </div>
+                      <div>
+                        <p><strong className="text-gray-700">Assigned To:</strong> {complaint.assignedTo || 'Not assigned yet'}</p>
+                        {complaint.status === 'resolved' && !complaint.rating && (
+                          <button 
+                            onClick={() => setActiveTab('feedback')}
+                            className="text-blue-600 hover:text-blue-800 font-medium mt-2"
+                          >
+                            Give Feedback →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )
       
-      case 'feedback':
+      case 'feedback': {
+        const resolvedComplaints = complaints.filter(c => c.status === 'resolved');
         return (
           <div>
             <h1 className="text-3xl font-bold text-gray-800 mb-6">⭐ Feedback & Confirmation</h1>
             
-            {/* Resolved complaints that need feedback */}
-            <div className="space-y-6">
-              {complaints
-                .filter(c => c.status === 'resolved')
-                .map((complaint) => (
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+              </div>
+            ) : resolvedComplaints.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                <div className="text-6xl mb-4">📋</div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">No Resolved Complaints</h3>
+                <p className="text-gray-600">You don't have any resolved complaints to provide feedback on.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {resolvedComplaints.map((complaint) => (
                   <div key={complaint.id} className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex justify-between items-start mb-4">
                       <div>
@@ -477,7 +548,7 @@ const StudentDashboard = () => {
                           #{complaint.id} - {complaint.title}
                         </h3>
                         <p className="text-sm text-gray-600 mt-1">
-                          Resolved on {complaint.lastUpdate}
+                          Resolved on {complaint.lastUpdate || 'Recently'}
                         </p>
                       </div>
                       <span className="px-4 py-2 bg-green-100 text-green-800 text-sm rounded-full">
@@ -532,17 +603,11 @@ const StudentDashboard = () => {
                     )}
                   </div>
                 ))}
-            </div>
-
-            {complaints.filter(c => c.status === 'resolved').length === 0 && (
-              <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                <div className="text-6xl mb-4">📋</div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">No Resolved Complaints</h3>
-                <p className="text-gray-600">You don't have any resolved complaints to provide feedback on.</p>
               </div>
             )}
           </div>
         )
+      }
       
       case 'profile':
         return (
@@ -551,11 +616,11 @@ const StudentDashboard = () => {
             <div className="bg-white rounded-lg shadow-md p-6 max-w-2xl">
               <div className="flex items-center mb-6">
                 <div className="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center text-white text-3xl font-bold">
-                  JS
+                  {user?.name?.charAt(0) || 'U'}
                 </div>
                 <div className="ml-6">
-                  <h2 className="text-2xl font-bold text-gray-800">John Smith</h2>
-                  <p className="text-gray-600">john.smith@example.com</p>
+                  <h2 className="text-2xl font-bold text-gray-800">{user?.name || 'User'}</h2>
+                  <p className="text-gray-600">{user?.email || 'No email provided'}</p>
                 </div>
               </div>
               
@@ -564,7 +629,7 @@ const StudentDashboard = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                   <input
                     type="text"
-                    defaultValue="John Smith"
+                    defaultValue={user?.name || ''}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   />
                 </div>
@@ -573,7 +638,7 @@ const StudentDashboard = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                   <input
                     type="email"
-                    defaultValue="john.smith@example.com"
+                    defaultValue={user?.email || ''}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   />
                 </div>
@@ -583,7 +648,7 @@ const StudentDashboard = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Hostel Name</label>
                     <input
                       type="text"
-                      defaultValue="Hostel A"
+                      defaultValue={user?.hostel || 'Hostel A'}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                     />
                   </div>
@@ -591,7 +656,7 @@ const StudentDashboard = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Room Number</label>
                     <input
                       type="text"
-                      defaultValue="101"
+                      defaultValue={user?.room || '101'}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                     />
                   </div>
@@ -613,7 +678,7 @@ const StudentDashboard = () => {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Left Sidebar Navigation */}
-      <aside className="w-64 bg-white shadow-lg">
+      <aside className="w-64 bg-white shadow-lg flex flex-col">
         {/* Logo/Header */}
         <div className="p-6 border-b">
           <h1 className="text-xl font-bold text-blue-600">Hostel Portal</h1>
@@ -621,7 +686,7 @@ const StudentDashboard = () => {
         </div>
 
         {/* Navigation Menu */}
-        <nav className="p-4">
+        <nav className="p-4 flex-grow">
           <ul className="space-y-2">
             {menuItems.map((item) => (
               <li key={item.id}>
@@ -642,17 +707,20 @@ const StudentDashboard = () => {
         </nav>
 
         {/* User Info at Bottom */}
-        <div className="absolute bottom-0 w-64 p-4 border-t bg-white">
-          <div className="flex items-center space-x-3">
+        <div className="p-4 border-t bg-white">
+          <div className="flex items-center space-x-3 mb-3">
             <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-              JS
+              {user?.name?.charAt(0) || 'U'}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-800">John Smith</p>
-              <p className="text-xs text-gray-600">Room 101</p>
+              <p className="text-sm font-semibold text-gray-800">{user?.name || 'User'}</p>
+              <p className="text-xs text-gray-600">Room {user?.room || 'N/A'}</p>
             </div>
           </div>
-          <button className="w-full mt-3 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition">
+          <button 
+            onClick={handleLogout}
+            className="w-full px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition"
+          >
             Logout
           </button>
         </div>
