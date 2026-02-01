@@ -273,21 +273,51 @@ router.get('/stats/dashboard', authMiddleware, async (req, res) => {
   try {
     const { role, id: userId } = req.user;
 
-    let whereClause = role === 'student' ? `WHERE user_id = ${userId}` : '';
+    let totalQuery, submittedQuery, inProgressQuery, resolvedQuery, overdueQuery;
+    let params = [];
 
-    const totalResult = await db.query(`SELECT COUNT(*) as total FROM complaints ${whereClause}`);
-    const submittedResult = await db.query(`SELECT COUNT(*) as count FROM complaints ${whereClause} ${whereClause ? 'AND' : 'WHERE'} status = 'submitted'`);
-    const inProgressResult = await db.query(`SELECT COUNT(*) as count FROM complaints ${whereClause} ${whereClause ? 'AND' : 'WHERE'} status IN ('assigned', 'in-progress')`);
-    const resolvedResult = await db.query(`SELECT COUNT(*) as count FROM complaints ${whereClause} ${whereClause ? 'AND' : 'WHERE'} status = 'resolved'`);
-    const overdueResult = await db.query(`SELECT COUNT(*) as count FROM complaints ${whereClause} ${whereClause ? 'AND' : 'WHERE'} status = 'overdue'`);
+    if (role === 'student') {
+      totalQuery = 'SELECT COUNT(*) as total FROM complaints WHERE user_id = ?';
+      submittedQuery = 'SELECT COUNT(*) as count FROM complaints WHERE user_id = ? AND status = ?';
+      inProgressQuery = 'SELECT COUNT(*) as count FROM complaints WHERE user_id = ? AND status IN (?, ?)';
+      resolvedQuery = 'SELECT COUNT(*) as count FROM complaints WHERE user_id = ? AND status = ?';
+      overdueQuery = 'SELECT COUNT(*) as count FROM complaints WHERE user_id = ? AND status = ?';
 
-    res.json({
-      total: parseInt(totalResult.rows[0].total),
-      submitted: parseInt(submittedResult.rows[0].count),
-      inProgress: parseInt(inProgressResult.rows[0].count),
-      resolved: parseInt(resolvedResult.rows[0].count),
-      overdue: parseInt(overdueResult.rows[0].count),
-    });
+      const totalResult = await db.query(totalQuery, [userId]);
+      const submittedResult = await db.query(submittedQuery, [userId, 'submitted']);
+      const inProgressResult = await db.query(inProgressQuery, [userId, 'assigned', 'in-progress']);
+      const resolvedResult = await db.query(resolvedQuery, [userId, 'resolved']);
+      const overdueResult = await db.query(overdueQuery, [userId, 'overdue']);
+
+      res.json({
+        total: parseInt(totalResult.rows[0].total) || 0,
+        submitted: parseInt(submittedResult.rows[0].count) || 0,
+        inProgress: parseInt(inProgressResult.rows[0].count) || 0,
+        resolved: parseInt(resolvedResult.rows[0].count) || 0,
+        overdue: parseInt(overdueResult.rows[0].count) || 0,
+      });
+    } else {
+      // Warden sees all complaints
+      totalQuery = 'SELECT COUNT(*) as total FROM complaints';
+      submittedQuery = 'SELECT COUNT(*) as count FROM complaints WHERE status = ?';
+      inProgressQuery = 'SELECT COUNT(*) as count FROM complaints WHERE status IN (?, ?)';
+      resolvedQuery = 'SELECT COUNT(*) as count FROM complaints WHERE status = ?';
+      overdueQuery = 'SELECT COUNT(*) as count FROM complaints WHERE status = ?';
+
+      const totalResult = await db.query(totalQuery);
+      const submittedResult = await db.query(submittedQuery, ['submitted']);
+      const inProgressResult = await db.query(inProgressQuery, ['assigned', 'in-progress']);
+      const resolvedResult = await db.query(resolvedQuery, ['resolved']);
+      const overdueResult = await db.query(overdueQuery, ['overdue']);
+
+      res.json({
+        total: parseInt(totalResult.rows[0].total) || 0,
+        submitted: parseInt(submittedResult.rows[0].count) || 0,
+        inProgress: parseInt(inProgressResult.rows[0].count) || 0,
+        resolved: parseInt(resolvedResult.rows[0].count) || 0,
+        overdue: parseInt(overdueResult.rows[0].count) || 0,
+      });
+    }
   } catch (error) {
     console.error('Get stats error:', error);
     res.status(500).json({ message: 'Server error while fetching statistics' });

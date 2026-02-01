@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { complaintsAPI } from '../services/api'
+import { complaintsAPI, authAPI } from '../services/api'
 
 const WardenDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -12,11 +12,6 @@ const WardenDashboard = () => {
     priority: '',
     status: '',
   })
-
-  useEffect(() => {
-    fetchComplaints()
-    fetchStats()
-  }, [fetchComplaints, fetchStats])
 
   const fetchComplaints = useCallback(async () => {
     try {
@@ -37,6 +32,11 @@ const WardenDashboard = () => {
       console.error('Error fetching stats:', err)
     }
   }, [])
+
+  useEffect(() => {
+    fetchComplaints()
+    fetchStats()
+  }, [fetchComplaints, fetchStats])
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -74,10 +74,28 @@ const WardenDashboard = () => {
       setSelectedComplaint(null)
       alert('Complaint assigned successfully!')
       fetchComplaints() // Refresh the list
+      fetchStats() // Refresh stats
     } catch (err) {
       console.error('Error assigning complaint:', err)
       alert('Failed to assign complaint')
     }
+  }
+
+  const handleStatusUpdate = async (complaintId, newStatus) => {
+    try {
+      await complaintsAPI.updateStatus(complaintId, newStatus)
+      alert(`Complaint status updated to ${newStatus}!`)
+      fetchComplaints() // Refresh the list
+      fetchStats() // Refresh stats
+    } catch (err) {
+      console.error('Error updating status:', err)
+      alert('Failed to update status')
+    }
+  }
+
+  const handleLogout = () => {
+    authAPI.logout()
+    window.location.href = '/'
   }
 
   const filteredComplaints = complaints.filter(complaint => {
@@ -417,11 +435,28 @@ const WardenDashboard = () => {
                       <div className="space-y-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Update Status *
+                          </label>
+                          <select
+                            defaultValue={selectedComplaint.status}
+                            onChange={(e) => handleStatusUpdate(selectedComplaint.id, e.target.value)}
+                            className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                          >
+                            <option value="submitted">Submitted</option>
+                            <option value="assigned">Assigned</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="resolved">Resolved</option>
+                            <option value="overdue">Overdue</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
                             Assign to Maintenance Team *
                           </label>
                           <select
                             name="team"
-                            defaultValue={selectedComplaint.assignedTo}
+                            defaultValue={selectedComplaint.assigned_to}
                             required
                             className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                           >
@@ -664,7 +699,10 @@ const WardenDashboard = () => {
               <p className="text-xs text-gray-600">Administrator</p>
             </div>
           </div>
-          <button className="w-full mt-3 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition">
+          <button 
+            onClick={handleLogout}
+            className="w-full mt-3 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition"
+          >
             Logout
           </button>
         </div>
