@@ -27,7 +27,7 @@ router.post(
 
       // Check if complaint exists and belongs to user
       const complaintResult = await db.query(
-        'SELECT * FROM complaints WHERE id = $1 AND user_id = $2',
+        'SELECT * FROM complaints WHERE id = ? AND user_id = ?',
         [complaintId, userId]
       );
 
@@ -37,7 +37,7 @@ router.post(
 
       // Check if feedback already exists
       const existingFeedback = await db.query(
-        'SELECT * FROM feedback WHERE complaint_id = $1 AND user_id = $2',
+        'SELECT * FROM feedback WHERE complaint_id = ? AND user_id = ?',
         [complaintId, userId]
       );
 
@@ -47,13 +47,16 @@ router.post(
 
       // Insert feedback
       const result = await db.query(
-        'INSERT INTO feedback (complaint_id, user_id, rating, comment) VALUES ($1, $2, $3, $4) RETURNING *',
+        'INSERT INTO feedback (complaint_id, user_id, rating, comment) VALUES (?, ?, ?, ?)',
         [complaintId, userId, rating, comment || null]
       );
 
+      // Get the created feedback
+      const feedbackResult = await db.query('SELECT * FROM feedback WHERE id = ?', [result.rows.insertId]);
+
       res.status(201).json({
         message: 'Feedback submitted successfully',
-        feedback: result.rows[0],
+        feedback: feedbackResult.rows[0],
       });
     } catch (error) {
       console.error('Submit feedback error:', error);
@@ -73,7 +76,7 @@ router.get('/:complaintId', authMiddleware, async (req, res) => {
       `SELECT f.*, u.full_name 
        FROM feedback f 
        JOIN users u ON f.user_id = u.id 
-       WHERE f.complaint_id = $1`,
+       WHERE f.complaint_id = ?`,
       [complaintId]
     );
 

@@ -59,19 +59,21 @@ router.post(
       const imagePath = req.file ? req.file.path : null;
 
       // Get user details
-      const userResult = await db.query('SELECT full_name, room_number FROM users WHERE id = $1', [userId]);
+      const userResult = await db.query('SELECT full_name, room_number FROM users WHERE id = ?', [userId]);
       const user = userResult.rows[0];
 
       const result = await db.query(
         `INSERT INTO complaints (user_id, title, category, description, location, urgency, image_path, student_name, room_number, status) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'submitted') 
-         RETURNING *`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted')`,
         [userId, title, category, description, location, urgency, imagePath, user.full_name, user.room_number]
       );
 
+      // Get the created complaint
+      const complaintResult = await db.query('SELECT * FROM complaints WHERE id = ?', [result.rows.insertId]);
+
       res.status(201).json({
         message: 'Complaint created successfully',
-        complaint: result.rows[0],
+        complaint: complaintResult.rows[0],
       });
     } catch (error) {
       console.error('Create complaint error:', error);
@@ -94,21 +96,21 @@ router.get('/', authMiddleware, async (req, res) => {
 
     // Students can only see their own complaints
     if (role === 'student') {
-      conditions.push(`user_id = $${params.length + 1}`);
+      conditions.push('user_id = ?');
       params.push(userId);
     }
 
     // Apply filters
     if (status) {
-      conditions.push(`status = $${params.length + 1}`);
+      conditions.push('status = ?');
       params.push(status);
     }
     if (category) {
-      conditions.push(`category = $${params.length + 1}`);
+      conditions.push('category = ?');
       params.push(category);
     }
     if (urgency) {
-      conditions.push(`urgency = $${params.length + 1}`);
+      conditions.push('urgency = ?');
       params.push(urgency);
     }
 
@@ -138,12 +140,12 @@ router.get('/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
     const { role, id: userId } = req.user;
 
-    let query = 'SELECT * FROM complaints WHERE id = $1';
+    let query = 'SELECT * FROM complaints WHERE id = ?';
     const params = [id];
 
     // Students can only view their own complaints
     if (role === 'student') {
-      query += ' AND user_id = $2';
+      query += ' AND user_id = ?';
       params.push(userId);
     }
 
@@ -177,17 +179,20 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     }
 
     const result = await db.query(
-      'UPDATE complaints SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      'UPDATE complaints SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [status, id]
     );
 
-    if (result.rows.length === 0) {
+    if (result.rows.affectedRows === 0) {
       return res.status(404).json({ message: 'Complaint not found' });
     }
 
+    // Get the updated complaint
+    const complaintResult = await db.query('SELECT * FROM complaints WHERE id = ?', [id]);
+
     res.json({
       message: 'Complaint status updated successfully',
-      complaint: result.rows[0],
+      complaint: complaintResult.rows[0],
     });
   } catch (error) {
     console.error('Update complaint status error:', error);
@@ -209,19 +214,21 @@ router.put('/:id/assign', authMiddleware, async (req, res) => {
 
     const result = await db.query(
       `UPDATE complaints 
-       SET assigned_to = $1, urgency = $2, deadline = $3, status = 'assigned', updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $4 
-       RETURNING *`,
+       SET assigned_to = ?, urgency = ?, deadline = ?, status = 'assigned', updated_at = CURRENT_TIMESTAMP 
+       WHERE id = ?`,
       [assignedTo, urgency || 'medium', deadline || null, id]
     );
 
-    if (result.rows.length === 0) {
+    if (result.rows.affectedRows === 0) {
       return res.status(404).json({ message: 'Complaint not found' });
     }
 
+    // Get the updated complaint
+    const complaintResult = await db.query('SELECT * FROM complaints WHERE id = ?', [id]);
+
     res.json({
       message: 'Complaint assigned successfully',
-      complaint: result.rows[0],
+      complaint: complaintResult.rows[0],
     });
   } catch (error) {
     console.error('Assign complaint error:', error);
@@ -237,20 +244,18 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
     const { role, id: userId } = req.user;
 
-    let query = 'DELETE FROM complaints WHERE id = $1';
+    let query = 'DELETE FROM complaints WHERE id = ?';
     const params = [id];
 
     // Students can only delete their own complaints
     if (role === 'student') {
-      query += ' AND user_id = $2';
+      query += ' AND user_id = ?';
       params.push(userId);
     }
 
-    query += ' RETURNING *';
-
     const result = await db.query(query, params);
 
-    if (result.rows.length === 0) {
+    if (result.rows.affectedRows === 0) {
       return res.status(404).json({ message: 'Complaint not found or unauthorized' });
     }
 

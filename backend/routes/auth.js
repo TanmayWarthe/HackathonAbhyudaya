@@ -43,7 +43,7 @@ router.post(
       const { fullName, email, password, role, hostelName, roomNumber } = req.body;
 
       // Check if user already exists
-      const userExists = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+      const userExists = await db.query('SELECT * FROM users WHERE email = ?', [email]);
       if (userExists.rows.length > 0) {
         return res.status(400).json({ message: 'User already exists with this email' });
       }
@@ -54,11 +54,13 @@ router.post(
 
       // Create user
       const newUser = await db.query(
-        'INSERT INTO users (full_name, email, password, role, hostel_name, room_number) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        'INSERT INTO users (full_name, email, password, role, hostel_name, room_number) VALUES (?, ?, ?, ?, ?, ?)',
         [fullName, email, hashedPassword, role, hostelName || null, roomNumber || null]
       );
 
-      const user = newUser.rows[0];
+      // Get the created user
+      const userResult = await db.query('SELECT * FROM users WHERE id = ?', [newUser.rows.insertId]);
+      const user = userResult.rows[0];
 
       // Generate token
       const token = generateToken(user);
@@ -102,7 +104,7 @@ router.post(
       const { email, password, role } = req.body;
 
       // Check if user exists
-      const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+      const result = await db.query('SELECT * FROM users WHERE email = ?', [email]);
       if (result.rows.length === 0) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
@@ -153,7 +155,7 @@ router.get('/me', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const result = await db.query('SELECT id, full_name, email, role, hostel_name, room_number FROM users WHERE id = $1', [decoded.id]);
+    const result = await db.query('SELECT id, full_name, email, role, hostel_name, room_number FROM users WHERE id = ?', [decoded.id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
